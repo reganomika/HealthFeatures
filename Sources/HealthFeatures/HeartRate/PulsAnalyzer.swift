@@ -12,15 +12,14 @@ public class PulsAnalyzer: NSObject {
     private let hueFilter = Filter()
     private var validFrameCounter = 0
     private var measurementStartedFlag = false
-    
-    private var inputs: [Double] = []
-    
+        
     public var startMeasurement: (() -> Void)?
     public var finishMeasurement: (() -> Void)?
     
-    public func getAveragePulse() -> Double? {
+    public func getAveragePulse() -> Float {
         let average = pulseDetector.getAverage()
-        return average > 0 ? Double(60.0 / average) : nil
+        let pulse = 60.0 / average
+        return pulse
     }
     
     public init(previewContainer: AVCaptureVideoPreviewLayer?) {
@@ -126,14 +125,13 @@ public class PulsAnalyzer: NSObject {
         }
         
         let hsv = rgb2hsv((red: red, green: green, blue: blue, alpha: 1.0))
-        if hsv.saturation > 0.3 && hsv.brightness > 0.3 {
+        if hsv.1 > 0.5 && hsv.2 > 0.5 {
             if !measurementStartedFlag {
                 startMeasurement?()
                 measurementStartedFlag = true
             }
             validFrameCounter += 1
-            inputs.append(hsv.hue)
-            let filtered = hueFilter.processValue(value: Double(hsv.hue))
+            let filtered = hueFilter.processValue(value: Double(hsv.0))
             if validFrameCounter > 60 {
                 pulseDetector.addNewValue(newVal: filtered, atTime: CACurrentMediaTime())
             }
@@ -194,7 +192,7 @@ public extension AVCaptureDevice {
     }
     
     func updateVideoFormat() {
-        let fps = 30.0
+        let fps: Int32 = 30
         let availableFormats: [AVCaptureDevice.Format] = availableFormatsFor(preferredFps: Float64(fps))
         
         var selectedFormat: AVCaptureDevice.Format? = formatFor(
@@ -211,8 +209,8 @@ public extension AVCaptureDevice {
             }
             activeFormat = selectedFormat
             
-            activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: Int32(fps))
-            activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: Int32(fps))
+            activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: fps)
+            activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: fps)
             unlockForConfiguration()
         }
     }
