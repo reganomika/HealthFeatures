@@ -63,8 +63,10 @@ public class PulsAnalyzer: NSObject {
             return
         }
         DispatchQueue.global(qos: .background).async { [weak self] in
-            self?.toggleTorch(on: true)
             self?.captureSession.startRunning()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self?.toggleTorch(on: true)
+            }
         }
     }
     
