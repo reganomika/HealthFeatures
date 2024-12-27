@@ -15,7 +15,8 @@ public class PulsAnalyzer: NSObject {
     
     private var inputs: [Double] = []
     
-    public var pulseResultHandler: ((Double?) -> Void)?
+    public var startMeasurement: (() -> Void)?
+    public var finishMeasurement: (() -> Void)?
     
     public func getAveragePulse() -> Double? {
         let average = pulseDetector.getAverage()
@@ -92,9 +93,9 @@ public class PulsAnalyzer: NSObject {
     }
     
     private func process(buffer: CMSampleBuffer) {
-        var redmean: CGFloat = 0.0
-        var greenmean: CGFloat = 0.0
-        var bluemean: CGFloat = 0.0
+        var red: CGFloat = 0.0
+        var green: CGFloat = 0.0
+        var blue: CGFloat = 0.0
         
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else { return }
         let cameraImage = CIImage(cvPixelBuffer: pixelBuffer)
@@ -116,30 +117,31 @@ public class PulsAnalyzer: NSObject {
         var BGRA_index = 0
         for pixel in bytes {
             switch BGRA_index {
-            case 0: bluemean = CGFloat(pixel)
-            case 1: greenmean = CGFloat(pixel)
-            case 2: redmean = CGFloat(pixel)
+            case 0: blue = CGFloat(pixel)
+            case 1: green = CGFloat(pixel)
+            case 2: red = CGFloat(pixel)
             default: break
             }
             BGRA_index += 1
         }
         
-        let hsv = rgb2hsv((red: redmean, green: greenmean, blue: bluemean, alpha: 1.0))
+        let hsv = rgb2hsv((red: red, green: green, blue: blue, alpha: 1.0))
         if hsv.saturation > 0.3 && hsv.brightness > 0.3 {
+            if !measurementStartedFlag {
+                startMeasurement?()
+                measurementStartedFlag = true
+            }
             validFrameCounter += 1
             inputs.append(hsv.hue)
             let filtered = hueFilter.processValue(value: Double(hsv.hue))
             if validFrameCounter > 60 {
-                let pulse = pulseDetector.addNewValue(newVal: filtered, atTime: CACurrentMediaTime())
-                if pulse > 0 {
-                    pulseResultHandler?(Double(pulse))
-                }
+                pulseDetector.addNewValue(newVal: filtered, atTime: CACurrentMediaTime())
             }
         } else {
             validFrameCounter = 0
             measurementStartedFlag = false
             pulseDetector.reset()
-            pulseResultHandler?(nil)
+            finishMeasurement?()
         }
     }
 }
