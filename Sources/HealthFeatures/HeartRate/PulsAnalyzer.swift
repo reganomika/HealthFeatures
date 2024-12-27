@@ -1,43 +1,26 @@
 import Foundation
+import CoreImage
 import AVFoundation
+import QuartzCore
 
-public enum CameraType: Int {
-    case back
-    case front
-    
-    public func captureDevice() -> AVCaptureDevice? {
-        switch self {
-        case .front:
-            let devices = AVCaptureDevice.DiscoverySession(
-                deviceTypes: [],
-                mediaType: AVMediaType.video,
-                position: .front
-            ).devices
-            for device in devices where device.position == .front {
-                return device
-            }
-        default:
-            break
-        }
-        return AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
-    }
-}
-
-public typealias ImageBufferHandler = ((_ imageBuffer: CMSampleBuffer) -> ())
-
-public class PulsDetector: NSObject {
+public class PulsAnalyzer: NSObject {
     private let captureSession = AVCaptureSession()
     private var videoDevice: AVCaptureDevice!
     private var videoConnection: AVCaptureConnection!
-    private var audioConnection: AVCaptureConnection!
     private var previewLayer: AVCaptureVideoPreviewLayer?
+    private let pulseDetector = PulseDetector()
+    private let hueFilter = Filter()
+    private var validFrameCounter = 0
+    private var measurementStartedFlag = false
     
-    public var imageBufferHandler: ImageBufferHandler?
+    private var inputs: [Double] = []
     
-    public init(cameraType: CameraType, previewContainer: AVCaptureVideoPreviewLayer?) {
+    public var pulseResultHandler: ((Double?) -> Void)?
+    
+    public init(previewContainer: AVCaptureVideoPreviewLayer?) {
         super.init()
         
-        videoDevice = cameraType.captureDevice()
+        videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
         
         do {
             captureSession.sessionPreset = .low
@@ -87,18 +70,63 @@ public class PulsDetector: NSObject {
             self?.captureSession.stopRunning()
         }
     }
+    
+    private func process(buffer: CMSampleBuffer) {
+        var redmean: CGFloat = 0.0
+        var greenmean: CGFloat = 0.0
+        var bluemean: CGFloat = 0.0
+        
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else { return }
+        let cameraImage = CIImage(cvPixelBuffer: pixelBuffer)
+
+        let extent = cameraImage.extent
+        let inputExtent = CIVector(x: extent.origin.x, y: extent.origin.y, z: extent.size.width, w: extent.size.height)
+        let averageFilter = CIFilter(
+            name: "CIAreaAverage",
+            parameters: [kCIInputImageKey: cameraImage, kCIInputExtentKey: inputExtent]
+        )!
+        let outputImage = averageFilter.outputImage!
+
+        let ctx = CIContext(options: nil)
+        guard let cgImage = ctx.createCGImage(outputImage, from: outputImage.extent) else { return }
+        
+        let rawData = cgImage.dataProvider!.data! as NSData
+        let pixels = rawData.bytes.assumingMemoryBound(to: UInt8.self)
+        let bytes = UnsafeBufferPointer(start: pixels, count: rawData.length)
+        var BGRA_index = 0
+        for pixel in bytes {
+            switch BGRA_index {
+            case 0: bluemean = CGFloat(pixel)
+            case 1: greenmean = CGFloat(pixel)
+            case 2: redmean = CGFloat(pixel)
+            default: break
+            }
+            BGRA_index += 1
+        }
+        
+        let hsv = rgb2hsv((red: redmean, green: greenmean, blue: bluemean, alpha: 1.0))
+        if hsv.saturation > 0.5 && hsv.brightness > 0.5 {
+            validFrameCounter += 1
+            inputs.append(hsv.hue)
+            let filtered = hueFilter.processValue(value: Double(hsv.hue))
+            if validFrameCounter > 60 {
+                let pulse = pulseDetector.addNewValue(newVal: filtered, atTime: CACurrentMediaTime())
+                if pulse > 0 {
+                    pulseResultHandler?(Double(pulse))
+                }
+            }
+        } else {
+            validFrameCounter = 0
+            measurementStartedFlag = false
+            pulseDetector.reset()
+            pulseResultHandler?(nil)
+        }
+    }
 }
 
-extension PulsDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
-
+extension PulsAnalyzer: AVCaptureVideoDataOutputSampleBufferDelegate {
     public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        if connection.videoOrientation != .portrait {
-            connection.videoOrientation = .portrait
-            return
-        }
-        if let imageBufferHandler = imageBufferHandler {
-            imageBufferHandler(sampleBuffer)
-        }
+        process(buffer: sampleBuffer)
     }
 }
 
