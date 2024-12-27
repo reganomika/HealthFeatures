@@ -17,6 +17,11 @@ public class PulsAnalyzer: NSObject {
     
     public var pulseResultHandler: ((Double?) -> Void)?
     
+    public func getAveragePulse() -> Double? {
+        let average = pulseDetector.getAverage()
+        return average > 0 ? Double(60.0 / average) : nil
+    }
+    
     public init(previewContainer: AVCaptureVideoPreviewLayer?) {
         super.init()
         
