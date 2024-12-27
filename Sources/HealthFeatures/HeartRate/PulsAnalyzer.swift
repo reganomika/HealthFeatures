@@ -129,7 +129,7 @@ public class PulsAnalyzer: NSObject {
        
             validFrameCounter += 1
             let filtered = hueFilter.processValue(value: Double(hsv.0))
-            if validFrameCounter > 30 {
+            if validFrameCounter > 60 {
                 pulseDetector.addNewValue(newVal: filtered, atTime: CACurrentMediaTime())
                 
                 if !measurementStartedFlag {
@@ -197,7 +197,7 @@ public extension AVCaptureDevice {
         let fps: Int32 = 30
         let availableFormats: [AVCaptureDevice.Format] = availableFormatsFor(preferredFps: Float64(fps))
         
-        var selectedFormat: AVCaptureDevice.Format? = formatFor(
+        let selectedFormat: AVCaptureDevice.Format? = formatFor(
             preferredSize: CGSize(width: 300, height: 300),
             availableFormats: availableFormats
         )
