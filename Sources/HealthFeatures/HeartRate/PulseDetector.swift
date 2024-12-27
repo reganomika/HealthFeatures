@@ -4,8 +4,8 @@ import QuartzCore
 private let maxPeriodsToStore = 20
 private let averageSize = 20
 private let invalidPulsePeriod = -1
-private let maxPeriod = 1.5
-private let minPeriod = 0.1
+private let maxPeriod = 2.0
+private let minPeriod = 0.05
 private let invalidEntry: Double = -100
 
 class PulseDetector: NSObject {

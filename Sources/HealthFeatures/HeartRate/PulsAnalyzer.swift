@@ -63,6 +63,7 @@ public class PulsAnalyzer: NSObject {
             return
         }
         DispatchQueue.global(qos: .background).async { [weak self] in
+            self?.toggleTorch(on: true)
             self?.captureSession.startRunning()
         }
     }
@@ -73,6 +74,18 @@ public class PulsAnalyzer: NSObject {
         }
         DispatchQueue.global(qos: .background).async { [weak self] in
             self?.captureSession.stopRunning()
+            self?.toggleTorch(on: false)
+        }
+    }
+    
+    private func toggleTorch(on: Bool) {
+        guard let device = videoDevice, device.hasTorch, device.isTorchAvailable else { return }
+        do {
+            try device.lockForConfiguration()
+            device.torchMode = on ? .on : .off
+            device.unlockForConfiguration()
+        } catch {
+            print("Error toggling torch: \(error.localizedDescription)")
         }
     }
     
@@ -110,7 +123,7 @@ public class PulsAnalyzer: NSObject {
         }
         
         let hsv = rgb2hsv((red: redmean, green: greenmean, blue: bluemean, alpha: 1.0))
-        if hsv.saturation > 0.5 && hsv.brightness > 0.5 {
+        if hsv.saturation > 0.3 && hsv.brightness > 0.3 {
             validFrameCounter += 1
             inputs.append(hsv.hue)
             let filtered = hueFilter.processValue(value: Double(hsv.hue))
