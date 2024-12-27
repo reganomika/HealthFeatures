@@ -126,14 +126,16 @@ public class PulsAnalyzer: NSObject {
         
         let hsv = rgb2hsv((red: red, green: green, blue: blue, alpha: 1.0))
         if hsv.1 > 0.5 && hsv.2 > 0.5 {
-            if !measurementStartedFlag {
-                startMeasurement?()
-                measurementStartedFlag = true
-            }
+       
             validFrameCounter += 1
             let filtered = hueFilter.processValue(value: Double(hsv.0))
-            if validFrameCounter > 60 {
+            if validFrameCounter > 30 {
                 pulseDetector.addNewValue(newVal: filtered, atTime: CACurrentMediaTime())
+                
+                if !measurementStartedFlag {
+                    startMeasurement?()
+                    measurementStartedFlag = true
+                }
             }
         } else {
             validFrameCounter = 0
